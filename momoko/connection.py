@@ -91,7 +91,8 @@ class Pool:
     def transaction(self,
         statements,
         cursor_factory=None,
-        callback=None
+        callback=None,
+        retried=False
     ):
         """
         Run a sequence of SQL queries in a database transaction.
@@ -101,9 +102,9 @@ class Pool:
         """
         connection = self._get_connection()
         if not connection:
-            log.warning('Transaction: no connection available, operation queued.')
+            if not retried: log.warning('Transaction: no connection available, operation queued.')
             return self._ioloop.add_callback(partial(self.transaction,
-                statements, cursor_factory, callback))
+                statements, cursor_factory, callback, True))
 
         connection.transaction(statements, cursor_factory, callback)
 
@@ -111,7 +112,8 @@ class Pool:
         operation,
         parameters=(),
         cursor_factory=None,
-        callback=None
+        callback=None,
+        retried=False
     ):
         """
         Prepare and execute a database operation (query or command).
@@ -121,9 +123,9 @@ class Pool:
         """
         connection = self._get_connection()
         if not connection:
-            log.warning('Execute: no connection available, operation queued.')
+            if not retried: log.warning('Execute: no connection available, operation queued.')
             return self._ioloop.add_callback(partial(self.execute,
-                operation, parameters, cursor_factory, callback))
+                operation, parameters, cursor_factory, callback, True))
 
         connection.execute(operation, parameters, cursor_factory, callback)
 
@@ -131,7 +133,8 @@ class Pool:
         procname,
         parameters=(),
         cursor_factory=None,
-        callback=None
+        callback=None,
+        retried=False
     ):
         """
         Call a stored database procedure with the given name.
@@ -141,9 +144,9 @@ class Pool:
         """
         connection = self._get_connection()
         if not connection:
-            log.warning('Callproc: no connection available, operation queued.')
+            if not retried: log.warning('Callproc: no connection available, operation queued.')
             return self._ioloop.add_callback(partial(self.callproc,
-                procname, parameters, cursor_factory, callback))
+                procname, parameters, cursor_factory, callback, True))
 
         connection.callproc(procname, parameters, cursor_factory, callback)
 
@@ -160,7 +163,7 @@ class Pool:
         """
         self._pool[0].mogrify(operation, parameters, callback)
 
-    def register_hstore(self, unicode=False, callback=None):
+    def register_hstore(self, unicode=False, callback=None, retried=False):
         """
         Register adapter and typecaster for ``dict-hstore`` conversions.
 
@@ -170,9 +173,9 @@ class Pool:
         """
         connection = self._get_connection()
         if not connection:
-            log.warning('Register hstore: no connection available, operation queued.')
+            if not retried: log.warning('Register hstore: no connection available, operation queued.')
             return self._ioloop.add_callback(
-                partial(self.register_hstore, unicode, callback))
+                partial(self.register_hstore, unicode, callback, True))
 
         connection.register_hstore(True, unicode, callback)
 
