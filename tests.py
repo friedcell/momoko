@@ -31,7 +31,7 @@ test_hstore = True if os.environ.get('MOMOKO_TEST_HSTORE', False) == '1' else Fa
 good_dsn = 'dbname=%s user=%s password=%s host=%s port=%s' % (
     db_database, db_user, db_password, db_host, db_port)
 bad_dsn = 'dbname=%s user=%s password=xx%s host=%s port=%s' % (
-    'db', 'user', 'password', "127.0.0.127", 11111)
+    'db', 'user', 'password', "127.0.0.1", 11111)
 local_bad_dsn = 'dbname=%s user=%s password=xx%s' % (
     'db', 'user', 'password')
 
