@@ -5,14 +5,19 @@ momoko.exceptions
 
 Exceptions.
 
-Copyright 2011-2013 by Frank Smit.
+Copyright 2011-2014, Frank Smit & Zaar Hai.
 MIT, see LICENSE for more details.
 """
 
 
 class PoolError(Exception):
     """
-    The ``PoolError`` exception is raised when something goes wrong in the connection
-    pool. When the maximum amount is exceeded for example.
+    Raised when something goes wrong in the connection pool.
     """
     pass
+
+
+class PartiallyConnectedError(PoolError):
+    """
+    Raised  when :py:meth:`momoko.Pool` can not initialize all of the requested connections.
+    """

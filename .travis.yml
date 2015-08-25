@@ -5,32 +5,33 @@ python:
   - 2.7
   - 3.2
   - 3.3
+  - 3.4
   - pypy
+
+addons:
+  postgresql: "9.2"
 
 before_script:
   - psql -c 'CREATE DATABASE momoko_test;' -U postgres
+  - psql -U postgres momoko_test -c 'CREATE EXTENSION IF NOT EXISTS hstore'
 
 env:
-  - MOMOKO_PSYCOPG2_IMPL=psycopg2
-  - MOMOKO_PSYCOPG2_IMPL=psycopg2ct
-  - MOMOKO_PSYCOPG2_IMPL=psycopg2cffi
+  global:
+    - MOMOKO_TEST_HSTORE=1
+  matrix:
+    - MOMOKO_PSYCOPG2_IMPL=psycopg2
+    - MOMOKO_PSYCOPG2_IMPL=psycopg2cffi
 
-install: "pip install --use-mirrors tornado ${MOMOKO_PSYCOPG2_IMPL}"
+install: "pip install --use-mirrors tornado ${MOMOKO_PSYCOPG2_IMPL} unittest2"
 script: python setup.py test
 
 matrix:
   exclude:
     - python: 3.2
-      env: MOMOKO_PSYCOPG2_IMPL=psycopg2ct
-    - python: 3.2
       env: MOMOKO_PSYCOPG2_IMPL=psycopg2cffi
     - python: 3.3
-      env: MOMOKO_PSYCOPG2_IMPL=psycopg2ct
-    - python: 3.3
+      env: MOMOKO_PSYCOPG2_IMPL=psycopg2cffi
+    - python: 3.4
       env: MOMOKO_PSYCOPG2_IMPL=psycopg2cffi
     - python: pypy
       env: MOMOKO_PSYCOPG2_IMPL=psycopg2
-
-      # Doesn't work on Travis CI
-    - python: pypy
-      env: MOMOKO_PSYCOPG2_IMPL=psycopg2cffi

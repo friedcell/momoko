@@ -5,16 +5,14 @@ momoko
 
 Momoko wraps Psycopg2's functionality for use in Tornado.
 
-Copyright 2011-2013 by Frank Smit.
+Copyright 2011-2014, Frank Smit & Zaar Hai.
 MIT, see LICENSE for more details.
 """
 
 import psycopg2
-from psycopg2 import ProgrammingError
 
-from .connection import Pool, Connection
-from .exceptions import PoolError
-from .utils import Op, WaitOp, WaitAllOps
+from .connection import Pool, Connection, connect
+from .exceptions import PoolError, PartiallyConnectedError
 
 
 try:
