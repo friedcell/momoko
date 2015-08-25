@@ -30,7 +30,7 @@ from psycopg2.extensions import POLL_OK, POLL_READ, POLL_WRITE, POLL_ERROR
 
 from tornado import gen
 from tornado.ioloop import IOLoop
-from tornado.concurrent import chain_future, Future
+from tornado.concurrent import chain_future, Future, is_future
 
 from .exceptions import PoolError, PartiallyConnectedError
 
@@ -434,6 +434,18 @@ class Pool(object):
         future = Future()
 
         retry = []
+        
+        def run_retry(conn):
+            if conn.closed:
+                if not retry:
+                    log.debug("Retrying after a failed attempt")
+                    retry.append(conn)
+                    self.ioloop.add_future(conn.connect(), when_available)
+                    return True
+                else:
+                    future.set_exception(self._no_conn_availble_error)
+            else:
+                future.set_exc_info(sys.exc_info())
 
         def when_available(fut):
             try:
@@ -444,19 +456,15 @@ class Pool(object):
                     self.putconn(retry[0])
                 return
 
-            log.debug("Obtained connection: %s", conn.fileno)
+            log.debug("Obtained connection %s for %s", conn.fileno, method.__name__)
             try:
                 future_or_result = method(conn, *args, **kwargs)
+                log.debug("Method %s returned %s", method.__name__, "future" if is_future(future_or_result) else "result")
             except psycopg2.Error as error:
-                if conn.closed:
-                    if not retry:
-                        retry.append(conn)
-                        self.ioloop.add_future(conn.connect(), when_available)
-                        return
-                    else:
-                        future.set_exception(self._no_conn_availble_error)
-                else:
-                    future.set_exc_info(sys.exc_info())
+                if error.args[0].startswith("server closed the connection unexpectedly") and not conn.closed:
+                    conn.close()
+                if run_retry(conn):
+                    return
                 log.debug(2)
                 self.putconn(conn)
                 return
@@ -467,9 +475,16 @@ class Pool(object):
                 self.putconn(conn)
                 return
 
-            chain_future(future_or_result, future)
-            if not keep:
-                future.add_done_callback(lambda f: self.putconn(conn))
+            def chain_future(fut):
+                try:
+                    result = fut.result()
+                    future.set_result(result)
+                except psycopg2.Error:
+                    if run_retry(conn):
+                        return
+                if not keep:
+                    self.putconn(conn)
+            future_or_result.add_done_callback(chain_future)
 
         if not connection:
             self.ioloop.add_future(self.getconn(ping=False), when_available)
@@ -556,8 +571,11 @@ class Pool(object):
                 try:
                     ping_fut.result()
                 except psycopg2.Error as error:
-                    ping_future.set_exc_info(error)
-                    self.putconn(conn)
+                    ping_future.set_exc_info(sys.exc_info())
+                    if error.args[0].startswith("server closed the connection unexpectedly") and not conn.closed:
+                        conn.close()
+                    if conn in self.conns.busy:
+                        self.putconn(conn)
                 else:
                     ping_future.set_result(conn)
 
