@@ -30,6 +30,8 @@ db_port = os.environ.get('MOMOKO_TEST_PORT', 5432)
 test_hstore = True if os.environ.get('MOMOKO_TEST_HSTORE', False) == '1' else False
 good_dsn = 'dbname=%s user=%s password=%s host=%s port=%s' % (
     db_database, db_user, db_password, db_host, db_port)
+local_good_dsn = 'dbname=%s user=%s password=%s' % (
+    db_database, db_user, db_password)
 bad_dsn = 'dbname=%s user=%s password=xx%s host=%s port=%s' % (
     'db', 'user', 'password', "127.0.0.1", 11111)
 local_bad_dsn = 'dbname=%s user=%s password=xx%s' % (
@@ -811,9 +813,17 @@ class MomokoDatabaseRestartTest(PoolBaseTest):
         self.assertEqual(self.pool_size, len(db.conns.free))
         fno = db.conns.free[0].fileno
         os.close(fno)
-        with self.assertRaises(psycopg2.Error):
-            conn = yield db.getconn()
-        yield db.conns.free[0].connect()
+        conn = yield db.getconn()
+        self.assertEqual(1, len(db.conns.busy))
+        db.putconn(conn)
+        self.assertEqual(self.pool_size, len(db.conns.free))
+
+    @gen_test
+    def test_survive_local_database_reset_getconn(self):
+        db = yield self.build_pool(local_good_dsn)
+        self.assertEqual(self.pool_size, len(db.conns.free))
+        fno = db.conns.free[0].fileno
+        os.close(fno)
         conn = yield db.getconn()
         self.assertEqual(1, len(db.conns.busy))
         db.putconn(conn)
@@ -825,9 +835,15 @@ class MomokoDatabaseRestartTest(PoolBaseTest):
         self.assertEqual(self.pool_size, len(db.conns.free))
         fno = db.conns.free[0].fileno
         os.close(fno)
-        with self.assertRaises(psycopg2.Error):
-            conn = yield db.ping()
-        yield db.conns.free[0].connect()
+        conn = yield db.ping()
+        self.assertEqual(self.pool_size, len(db.conns.free))
+
+    @gen_test
+    def test_survive_local_database_reset_ping(self):
+        db = yield self.build_pool(local_good_dsn)
+        self.assertEqual(self.pool_size, len(db.conns.free))
+        fno = db.conns.free[0].fileno
+        os.close(fno)
         conn = yield db.ping()
         self.assertEqual(self.pool_size, len(db.conns.free))
 

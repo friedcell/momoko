@@ -461,7 +461,8 @@ class Pool(object):
                 future_or_result = method(conn, *args, **kwargs)
                 log.debug("Method %s returned %s", method.__name__, "future" if is_future(future_or_result) else "result")
             except psycopg2.Error as error:
-                if error.args[0].startswith("server closed the connection unexpectedly") and not conn.closed:
+                if (error.args[0].startswith("server closed the connection unexpectedly") or 
+                    error.args[0].startswith("could not receive data from server"))  and not conn.closed:
                     conn.close()
                 if run_retry(conn):
                     return
@@ -572,7 +573,8 @@ class Pool(object):
                     ping_fut.result()
                 except psycopg2.Error as error:
                     ping_future.set_exc_info(sys.exc_info())
-                    if error.args[0].startswith("server closed the connection unexpectedly") and not conn.closed:
+                    if (error.args[0].startswith("server closed the connection unexpectedly") or 
+                        error.args[0].startswith("could not receive data from server"))  and not conn.closed:
                         conn.close()
                     if conn in self.conns.busy:
                         self.putconn(conn)
