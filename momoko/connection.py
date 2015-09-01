@@ -30,7 +30,7 @@ from psycopg2.extensions import POLL_OK, POLL_READ, POLL_WRITE, POLL_ERROR
 
 from tornado import gen
 from tornado.ioloop import IOLoop
-from tornado.concurrent import chain_future, Future, is_future
+from tornado.concurrent import chain_future, Future
 
 from .exceptions import PoolError, PartiallyConnectedError
 
@@ -448,10 +448,9 @@ class Pool(object):
                     self.putconn(retry[0])
                 return
 
-            log.debug("Obtained connection %s for %s", conn.fileno, method.__name__)
+            log.debug("Obtained connection: %s", conn.fileno)
             try:
                 future_or_result = method(conn, *args, **kwargs)
-                log.debug("Method %s returned %s", method.__name__, "future" if is_future(future_or_result) else "result")
             except psycopg2.Error as error:
                 log.debug("Method failed synchronously")
                 return self._retry(retry, when_available, conn, keep, future)
