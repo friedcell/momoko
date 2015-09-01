@@ -885,7 +885,6 @@ class MomokoPoolShrinkTest(MomokoPoolParallelTest):
 
         self.assertEqual(db.conns.total, 3)
 
-
 if __name__ == '__main__':
     if debug:
         FORMAT = '%(asctime)-15s %(levelname)s:%(name)s %(funcName)-15s: %(message)s'

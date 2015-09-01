@@ -438,7 +438,7 @@ class Pool(object):
         future = Future()
 
         retry = []
-        
+
         def when_available(fut):
             try:
                 conn = fut.result()
