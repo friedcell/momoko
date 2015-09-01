@@ -886,50 +886,6 @@ class MomokoPoolShrinkTest(MomokoPoolParallelTest):
         self.assertEqual(db.conns.total, 3)
 
 
-class MomokoDatabaseRestartTest(PoolBaseTest):
-    pool_size = 1
-
-    @gen_test
-    def test_survive_database_reset_getconn(self):
-        db = yield self.build_pool()
-        self.assertEqual(self.pool_size, len(db.conns.free))
-        fno = db.conns.free[0].fileno
-        os.close(fno)
-        conn = yield db.getconn()
-        self.assertEqual(1, len(db.conns.busy))
-        db.putconn(conn)
-        self.assertEqual(self.pool_size, len(db.conns.free))
-
-    @gen_test
-    def test_survive_local_database_reset_getconn(self):
-        db = yield self.build_pool(local_good_dsn)
-        self.assertEqual(self.pool_size, len(db.conns.free))
-        fno = db.conns.free[0].fileno
-        os.close(fno)
-        conn = yield db.getconn()
-        self.assertEqual(1, len(db.conns.busy))
-        db.putconn(conn)
-        self.assertEqual(self.pool_size, len(db.conns.free))
-
-    @gen_test
-    def test_survive_database_reset_ping(self):
-        db = yield self.build_pool()
-        self.assertEqual(self.pool_size, len(db.conns.free))
-        fno = db.conns.free[0].fileno
-        os.close(fno)
-        conn = yield db.ping()
-        self.assertEqual(self.pool_size, len(db.conns.free))
-
-    @gen_test
-    def test_survive_local_database_reset_ping(self):
-        db = yield self.build_pool(local_good_dsn)
-        self.assertEqual(self.pool_size, len(db.conns.free))
-        fno = db.conns.free[0].fileno
-        os.close(fno)
-        conn = yield db.ping()
-        self.assertEqual(self.pool_size, len(db.conns.free))
-
-
 if __name__ == '__main__':
     if debug:
         FORMAT = '%(asctime)-15s %(levelname)s:%(name)s %(funcName)-15s: %(message)s'
