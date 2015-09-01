@@ -173,7 +173,7 @@ class Pool(object):
 
     :param list setsession:
         List of intial sql commands to be executed once connection is established.
-        If any of the commands failes, the connection will be closed.
+        If any of the commands fails, the connection will be closed.
         **NOTE:** The commands will be executed as one transaction block.
 
     :param bool auto_shrink:
@@ -195,6 +195,10 @@ class Pool(object):
     .. _psycopg2.extensions.connection: http://initd.org/psycopg/docs/connection.html#connection
     .. _Connection and cursor factories: http://initd.org/psycopg/docs/advanced.html#subclassing-cursor
     """
+
+    class DatabaseNotAvailable(psycopg2.DatabaseError):
+        """Raised when Pool can not connect to database server"""
+
     def __init__(self,
                  dsn,
                  connection_factory=None,
@@ -232,7 +236,7 @@ class Pool(object):
         self.conns = ConnectionContainer()
 
         self._last_connect_time = 0
-        self._no_conn_availble_error = psycopg2.DatabaseError("No database connection available")
+        self._no_conn_availble_error = self.DatabaseNotAvailable("No database connection available")
         self.shrink_period = shrink_period
         self.shrink_delay = shrink_delay
         self.auto_shrink = auto_shrink
@@ -435,24 +439,12 @@ class Pool(object):
 
         retry = []
         
-        def run_retry(conn):
-            if conn.closed:
-                if not retry:
-                    log.debug("Retrying after a failed attempt")
-                    retry.append(conn)
-                    self.ioloop.add_future(conn.connect(), when_available)
-                    return True
-                else:
-                    future.set_exception(self._no_conn_availble_error)
-            else:
-                future.set_exc_info(sys.exc_info())
-
         def when_available(fut):
             try:
                 conn = fut.result()
             except psycopg2.Error as error:
                 future.set_exc_info(sys.exc_info())
-                if retry:
+                if retry and not keep:
                     self.putconn(retry[0])
                 return
 
@@ -461,30 +453,27 @@ class Pool(object):
                 future_or_result = method(conn, *args, **kwargs)
                 log.debug("Method %s returned %s", method.__name__, "future" if is_future(future_or_result) else "result")
             except psycopg2.Error as error:
-                if isinstance(error, psycopg2.OperationalError) and not conn.closed:
-                    conn.close()
-                if run_retry(conn):
-                    return
-                log.debug(2)
-                self.putconn(conn)
-                return
+                log.debug("Method failed synchronously")
+                return self._retry(retry, when_available, conn, keep, future)
 
             if not async:
-                future.set_result(future_or_result)
-                log.debug(3)
-                self.putconn(conn)
-                return
-
-            def chain_future(fut):
-                try:
-                    result = fut.result()
-                    future.set_result(result)
-                except psycopg2.Error:
-                    if run_retry(conn):
-                        return
                 if not keep:
                     self.putconn(conn)
-            future_or_result.add_done_callback(chain_future)
+                future.set_result(future_or_result)
+                return
+
+            def when_done(rfut):
+                try:
+                    result = rfut.result()
+                except psycopg2.Error as error:
+                    log.debug("Method failed Asynchronously")
+                    return self._retry(retry, when_available, conn, keep, future)
+
+                if not keep:
+                    self.putconn(conn)
+                future.set_result(result)
+
+            self.ioloop.add_future(future_or_result, when_done)
 
         if not connection:
             self.ioloop.add_future(self.getconn(ping=False), when_available)
@@ -493,6 +482,20 @@ class Pool(object):
             f.set_result(connection)
             when_available(f)
         return future
+
+    def _retry(self, retry, what, conn, keep, future):
+        if conn.closed:
+            if not retry:
+                retry.append(conn)
+                self.ioloop.add_future(conn.connect(), what)
+                return
+            else:
+                future.set_exception(self._no_conn_availble_error)
+        else:
+            future.set_exc_info(sys.exc_info())
+        if not keep:
+            self.putconn(conn)
+        return
 
     def _reanimate(self):
         assert self.conns.dead, "BUG: don't call reanimate when there is no one to reanimate"
@@ -571,11 +574,11 @@ class Pool(object):
                 try:
                     ping_fut.result()
                 except psycopg2.Error as error:
-                    ping_future.set_exc_info(sys.exc_info())
-                    if isinstance(error, psycopg2.OperationalError) and not conn.closed:
-                        conn.close()
-                    if conn in self.conns.busy:
-                        self.putconn(conn)
+                    if conn.closed:
+                        ping_future.set_exception(self._no_conn_availble_error)
+                    else:
+                        ping_future.set_exc_info(sys.exc_info())
+                    self.putconn(conn)
                 else:
                     ping_future.set_result(conn)
 
@@ -616,7 +619,7 @@ class Connection(object):
 
     :param list setsession:
         List of intial sql commands to be executed once connection is established.
-        If any of the commands failes, the connection will be closed.
+        If any of the commands fails, the connection will be closed.
         **NOTE:** The commands will be executed as one transaction block.
 
     .. _Data Source Name: http://en.wikipedia.org/wiki/Data_Source_Name
@@ -654,6 +657,7 @@ class Connection(object):
         try:
             self.connection = psycopg2.connect(self.dsn, **kwargs)
         except psycopg2.Error as error:
+            self.connection = None
             future.set_exc_info(sys.exc_info())
             return future
 
@@ -672,6 +676,7 @@ class Connection(object):
 
         self.ioloop.add_handler(self.fileno, callback, IOLoop.WRITE)
         self.ioloop.add_future(future, self._set_server_version)
+        self.ioloop.add_future(future, self._close_on_fail)
 
         return future
 
@@ -679,6 +684,12 @@ class Connection(object):
         if future.exception():
             return
         self.server_version = self.connection.server_version
+
+    def _close_on_fail(self, future):
+        # If connection attempt evetually fails - marks connection as closed by ourselves
+        # since psycopg2 does not do that for us (on connection attempts)
+        if future.exception():
+            self.connection = None
 
     def _io_callback(self, future, result, fd=None, events=None):
         try:
@@ -695,7 +706,7 @@ class Connection(object):
             elif state == POLL_WRITE:
                 self.ioloop.update_handler(self.fileno, IOLoop.WRITE)
             else:
-                future.set_exception(psycopg2.OperationalError('poll() returned {0}'.format(state)))
+                future.set_exception(psycopg2.OperationalError("poll() returned %s" % state))
 
     def ping(self):
         """
@@ -815,7 +826,7 @@ class Connection(object):
             The class returned must be a subclass of `psycopg2.extensions.cursor`_.
             See `Connection and cursor factories`_ for details. Defaults to ``None``.
         :param bool auto_rollback:
-            If one of the transaction statements failes, try to automatically
+            If one of the transaction statements fails, try to automatically
             execute ROLLBACK to abort the transaction. If ROLLBACK fails, it would
             not be raised, but only logged.
 
@@ -836,10 +847,10 @@ class Connection(object):
                 cursor = future.result()
                 cursors.append(cursor)
             except Exception as error:
-                if not auto_rollback:
-                    transaction_future.set_exc_info(sys.exc_info())
-                else:
+                if auto_rollback and not self.closed:
                     self._rollback(transaction_future, error)
+                else:
+                    transaction_future.set_exc_info(sys.exc_info())
                 return
 
             try:
