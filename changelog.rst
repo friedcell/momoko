@@ -1,6 +1,85 @@
 Changelog
 =========
 
+2.1.1 (2015-08-03)
+------------------
+*  Fixed JSON/HSTORE support with named cursors (`issue 112`_). Thanks to helminster_.
+
+.. _issue 112: https://github.com/FSX/momoko/issues/112
+.. _helminster: https://github.com/helminster
+
+2.1.0 (2015-07-08)
+------------------
+*  Auto shrink support. Thanks to `John Chumnanvech`_.
+
+.. _John Chumnanvech: https://github.com/jchumnanvech
+
+2.0.0 (2015-05-10)
+------------------
+*  Full rewrite using using Futures_
+*  NOTE: The new API is similar but not backwards compatible. Make sure to read documentation first.
+
+.. _Futures: http://tornado.readthedocs.org/en/latest/concurrent.html
+
+1.1.6 (2015-04-26)
+------------------
+*  Aadded register_json
+*  Docs: fix typos, spelling, grammatical errors; improve unclear wording
+*  Removed support for psycopg2ct
+
+
+1.1.5 (2014-11-17)
+------------------
+
+*  Catching ALL types of early error. Fixes `issue 79`_.
+
+.. _issue 79: https://github.com/FSX/momoko/issues/79
+
+
+1.1.4 (2014-07-21)
+------------------
+
+*  Tornado 4.0 compatablity: backported old ``Task`` class for Tornado 4.0 compatablity.
+
+
+1.1.3 (2014-05-21)
+------------------
+
+* Fixed hstore.
+
+
+1.1.2 (2014-03-06)
+------------------
+
+* Fixed a minor Python 3.2 issue.
+
+
+1.1.1 (2014-03-06)
+------------------
+
+Fixes:
+
+* ``Connection.transaction`` does not break when passed SQL strings are of ``unicode`` type
+
+
+1.1.0 (2014-02-24)
+------------------
+
+New features:
+
+* Transparent automatic reconnects if database disappears and comes back.
+* Session init commands (``setsession``).
+* Dynamic pool size stretching. New connections will be opened under
+  load up-to predefined limit.
+* API for manual connection management with ``getconn``/``putconn``. Useful for server-side cursors.
+* A lot of internal improvements and cleanup.
+
+Fixes:
+
+* Connections are managed explicitly - eliminates transaction problems reported.
+* ``connection_factory`` (and ``curosr_factor``) arguments handled properly by ``Pool``.
+
+
 1.0.0 (2013-05-01)
 ------------------
 
@@ -18,7 +97,7 @@ Changelog
 * Replaced dynamic connection pool with a static one.
 * Add support for hstore_.
 
-.. _Psycopg2: http://www.initd.org/psycopg/
+.. _Psycopg2: http://initd.org/psycopg/
 .. _psycopg2ct: http://pypi.python.org/pypi/psycopg2ct
 .. _psycopg2cffi: http://pypi.python.org/pypi/psycopg2cffi
 .. _pull request 38: https://github.com/FSX/momoko/pull/38
