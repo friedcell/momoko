@@ -192,15 +192,11 @@ def main():
 
         application.db = momoko.Pool(
             dsn=dsn,
-<<<<<<< HEAD
-            size=1
-=======
             size=1,
             max_size=3,
             ioloop=ioloop,
             setsession=("SET TIME ZONE UTC",),
             raise_connect_errors=False,
->>>>>>> master
         )
 
         # this is a one way to run ioloop in sync
